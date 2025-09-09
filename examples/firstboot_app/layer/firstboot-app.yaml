@@ -1,0 +1,168 @@
+# METABEGIN
+# X-Env-Layer-Name: firstboot-app
+# X-Env-Layer-Category: example
+# X-Env-Layer-Desc: Sets hostname and installs a first-boot service that clones,
+#  builds, and runs your app from a URL. Values can be overridden in /boot/firmware/app.conf.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: rpi-user-credentials,systemd-net-min
+#
+# X-Env-VarPrefix: app
+#
+# X-Env-Var-url: https://github.com/rps-x-dev/example.git
+# X-Env-Var-url-Desc: Git URL of your application repository to clone at first boot
+# X-Env-Var-url-Required: n
+# X-Env-Var-url-Valid: string
+# X-Env-Var-url-Set: y
+#
+# X-Env-Var-build: ""
+# X-Env-Var-build-Desc: Optional build command to run inside /opt/app (e.g. make -j$(nproc))
+# X-Env-Var-build-Required: n
+# X-Env-Var-build-Valid: string
+# X-Env-Var-build-Set: y
+#
+# X-Env-Var-run: ""
+# X-Env-Var-run-Desc: Command to run the app (e.g. ./your-binary or bash run.sh)
+# X-Env-Var-run-Required: n
+# X-Env-Var-run-Valid: string
+# X-Env-Var-run-Set: y
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - git
+    - ca-certificates
+    - curl
+  customize-hooks:
+    # Install first-boot setup script and service templates
+    - mkdir -p $1/usr/local/sbin $1/etc/systemd/system $1/boot/firmware
+    - |
+      cat > $1/usr/local/sbin/app-firstboot-setup << 'EOS'
+      #!/bin/sh
+      set -eu
+      LOGTAG=app-firstboot
+      MARKER=/var/lib/app-firstboot.done
+      APPDIR=/opt/app
+      CONF=/boot/firmware/app.conf
+
+      log() { logger -t "$LOGTAG" "$@"; echo "$LOGTAG: $@"; }
+
+      # Load user overrides if present
+      if [ -f "$CONF" ]; then
+        set -a
+        . "$CONF"
+        set +a
+      fi
+
+      # 1) Set hostname if provided via CONF
+      if [ -n "${HOSTNAME:-}" ]; then
+        echo "$HOSTNAME" > /etc/hostname
+        sed -i "/127.0.1.1/d" /etc/hosts
+        echo "127.0.1.1   $HOSTNAME" >> /etc/hosts
+        hostnamectl set-hostname "$HOSTNAME" || true
+        log "Hostname set to $HOSTNAME"
+      fi
+
+      # If marker exists, do nothing
+      if [ -f "$MARKER" ]; then
+        log "First-boot already completed"
+        exit 0
+      fi
+
+      # 2) Ensure network up (basic wait)
+      for i in 1 2 3 4 5 6 7 8 9 10; do
+        ping -c1 -W1 1.1.1.1 >/dev/null 2>&1 && break
+        sleep 2
+      done
+
+      # 3) Prepare /opt/app
+      mkdir -p "$APPDIR"
+      if [ -n "${APP_URL:-${IGconf_app_url:-}}" ]; then
+        URL="${APP_URL:-${IGconf_app_url:-}}"
+        if [ -d "$APPDIR/.git" ]; then
+          log "Updating repo in $APPDIR"
+          git -C "$APPDIR" pull --ff-only || true
+        else
+          log "Cloning $URL into $APPDIR"
+          git clone "$URL" "$APPDIR" || {
+            log "Clone failed from $URL"; exit 1; }
+        fi
+      else
+        log "No APP_URL provided; skipping clone"
+      fi
+
+      # 4) Build if requested
+      if [ -n "${APP_BUILD:-${IGconf_app_build:-}}" ]; then
+        BUILD_CMD="${APP_BUILD:-${IGconf_app_build:-}}"
+        log "Building: $BUILD_CMD"
+        ( cd "$APPDIR" && sh -lc "$BUILD_CMD" ) || {
+          log "Build failed"; exit 1; }
+      fi
+
+      # 5) Mark complete and start the app service
+      touch "$MARKER"
+      systemctl enable --now app.service || true
+      log "First-boot setup complete"
+      exit 0
+      EOS
+    - chmod +x $1/usr/local/sbin/app-firstboot-setup
+
+    # Create systemd service units
+    - |
+      cat > $1/etc/systemd/system/app-firstboot-setup.service <<'EOF'
+      [Unit]
+      Description=First-boot: setup app (clone/build/configure)
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/app-firstboot-setup
+      StandardOutput=journal
+      StandardError=journal
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+    - |
+      cat > $1/etc/systemd/system/app.service <<EOF
+      [Unit]
+      Description=Application Service
+      After=network-online.target app-firstboot-setup.service
+      Wants=network-online.target
+
+      [Service]
+      EnvironmentFile=-/boot/firmware/app.conf
+      User=${IGconf_device_user1}
+      WorkingDirectory=/opt/app
+      ExecStart=/bin/sh -lc "${APP_RUN:-${IGconf_app_run}}"
+      Restart=always
+      RestartSec=3
+      StandardOutput=journal
+      StandardError=journal
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+
+    # Enable the first-boot unit; app.service will be enabled by the setup script
+    - $BDEBSTRAP_HOOKS/enable-units "$1" app-firstboot-setup
+
+post-image:
+  - |
+    BOOTDIR="$1"
+    # Try to detect vfat boot mount in output tree and drop a sample config
+    for f in "$BOOTDIR"/boot.vfat "$BOOTDIR"/boot-*.vfat; do
+      [ -f "$f" ] && {
+        mkdir -p "$BOOTDIR/firmware"
+        cat > "$BOOTDIR/firmware/app.conf" <<'EOC'
+        # Optional overrides consumed on first boot and by app.service
+        #HOSTNAME=my-firstboot-pi
+        #APP_URL=https://github.com/you/your-project.git
+        #APP_BUILD=make -j$(nproc)
+        #APP_RUN=./your-binary
+        EOC
+        break
+      }
+    done
+
+

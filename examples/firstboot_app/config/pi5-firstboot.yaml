@@ -1,0 +1,12 @@
+device:
+  layer: rpi5
+  hostname: my-firstboot-pi
+
+layer:
+  custom: firstboot-app
+
+image:
+  layer: image-rpios
+  name: pi5-firstboot
+  compression: zstd
+
