@@ -1,0 +1,23 @@
+device:
+  layer: rpi5
+  hostname: my-pi-hostname
+
+image:
+  layer: image-rpios
+  boot_part_size: 200%
+  root_part_size: 300%
+  name: deb12-arm64-custom
+
+layer:
+  app: openssh-server
+ssh:
+  pubkey_user1: "/home/rps/rpi-image-gen/shh/id_rsa.pub"
+
+sys:  
+  enable_ssh: true
+  disable_first_boot_user_rename: true
+  first_user: pi
+  first_user_pass: raspberry  # plaintext password
+
+layer:
+  base: bookworm-minbase

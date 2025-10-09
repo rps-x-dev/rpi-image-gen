@@ -24,37 +24,32 @@ mmdebstrap:
   - qt6-wayland
   - qml6-module-qtwayland-compositor
   - ninja-build
-    - qt6-base-dev
-    - qt6-declarative-dev
-    - qml6-module-qtquick
-    - qml6-module-qtquick-controls
-    - qml6-module-qtquick-layouts
-    - qt6-qmltooling-plugins
-    - qml6-module-qtquick-window
-    - qml6-module-qtquick-templates
-    - qml6-module-qtqml-workerscript
-    - qml6-module-qtquick-timeline
+  - qt6-base-dev
+  - qt6-declarative-dev
+  - qml6-module-qtquick
+  - qml6-module-qtquick-controls
+  - qml6-module-qtquick-layouts
+  - qt6-qmltooling-plugins
+  - qml6-module-qtquick-window
+  - qml6-module-qtquick-templates
+  - qml6-module-qtqml-workerscript
+  - qml6-module-qtquick-timeline
   - cmake
   - build-essential
-    - git
-    - gpiod
-    - libgpiod-dev
-    - libpaho-mqtt-dev
-    - libpaho-mqttpp-dev
-    - libssl-dev
-  
-  customize-hooks:
-    - |
-      chroot $1 bash -lc '
-        set -euo pipefail
-        APPDIR=/opt/postojna-kraskviz
-        if [ ! -d "$APPDIR/.git" ]; then
-          git clone https://github.com/rps-x-dev/postojna-kraskviz.git "$APPDIR"
-        else
-          git -C "$APPDIR" pull --ff-only || true
-        fi
-        mkdir -p "$APPDIR/build"
-        cd "$APPDIR/build"
-        cmake -G Ninja -DCMAKE_BUILD_TYPE=Release .. || cmake -DCMAKE_BUILD_TYPE=Release ..
-        command -v ninja >/dev/null 2>&1 && ninja -j"$(nproc)" || make -j"$(nproc)"
-      '
+  - git
+  - gpiod
+  - libgpiod-dev
+  - libpaho-mqtt-dev
+  - libpaho-mqttpp-dev
+  - libssl-dev
+  - openssh-server
+  - cloud-init
+  - cloud-guest-utils  
+  - netplan.io
+services:
+  enable:
+    - ssh
+    - cloud-init
+    - systemd-networkd
+    - systemd-networkd-wait-online
+   

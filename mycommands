@@ -1,0 +1,30 @@
+To build the image: 
+
+cd /home/rps/rpi-image-gen/
+./rpi-image-gen build -S ./examples/appkiosk/ -c kiosk.yaml
+sudo umount /dev/sdb1 /dev/sdb2
+sudo dd if=/home/rps/rpi-image-gen/work/image-myappkioskimage/myappkioskimage.img of=/dev/sdb bs=4M status=progress conv=fsync
+sync
+
+
+
+
+To build basic iamge:
+
+cd /home/rps/rpi-image-gen/
+./rpi-image-gen build -c ./config/bookworm-minbase.yaml
+sudo umount /dev/sdb1 /dev/sdb2
+sudo dd if=/home/rps/rpi-image-gen/work/image-deb12-arm64-min/deb12-arm64-min.img of=/dev/sdb bs=4M status=progress conv=fsync
+sync
+
+
+
+
+To build basic iamge 2 :
+
+cd /home/rps/rpi-image-gen/
+./rpi-image-gen build -c ./config/my-custom.yaml
+lsblk
+sudo umount /dev/sdb1 /dev/sdb2
+sudo dd if=/home/rps/rpi-image-gen/work/image-deb12-arm64-custom/deb12-arm64-custom.img of=/dev/sdb bs=4M status=progress conv=fsync
+sync
