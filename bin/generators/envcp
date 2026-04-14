@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -eu
+
+if [[ -n ${SOURCE_DATE_EPOCH:-} ]]; then
+   snapshot=$(date -u -d @"$SOURCE_DATE_EPOCH" +%Y%m%dT%H%M%SZ)
+else
+   snapshot=$(date -u +%Y%m%dT%H%M%SZ)
+fi
+
+env SNAPSHOT_ISO8601="$snapshot" envsubst < "$1" > "$2"
